@@ -1,39 +1,65 @@
 ---
 name: sync-manifest
-description: Bring the human-readable manifest in README.md back in line with what the nix config actually installs. Use this skill whenever you add, remove, rename or comment out anything in home.nix's home.packages or configuration.nix's homebrew.brews / homebrew.casks, whenever you change system.defaults, shell aliases, session variables, fonts or Zed userSettings, and after any nix flake update or flake.lock bump since those move the version numbers the README states. Also use it when asked to "update the README", "sync the manifest", "document what this installs", or to check whether the README is still accurate — and reach for it proactively after editing the nix files rather than waiting to be asked, because the manifest is hand-written prose that drifts silently and nothing else catches it.
+description: Update the manifest in README.md so it matches what the nix config actually installs, editing the README in place wherever the two disagree. Use this skill whenever you add, remove, rename or comment out anything in home.nix's home.packages or configuration.nix's homebrew.brews / homebrew.casks, whenever you change system.defaults, shell aliases, session variables, fonts or Zed userSettings, and after any nix flake update or flake.lock bump since those move the version numbers the README states. Also use it when asked to "update the README", "sync the manifest", "document what this installs", or to check whether the README is still accurate — and reach for it proactively after editing the nix files rather than waiting to be asked, because the manifest is hand-written prose that drifts silently and nothing else catches it.
 ---
 
 # Sync the README manifest
 
-`README.md` in this repo carries a manifest of everything a rebuild installs and
-configures. It is prose written for a human reading the repo cold, not generated
-output, which is exactly why it goes stale without anyone noticing. Your job is
-to make it true again while keeping it worth reading.
+`README.md` carries a manifest of everything a rebuild of this config installs
+and configures. It is prose written for someone reading the repo cold, not
+generated output, which is exactly why it goes stale without anyone noticing.
 
-`AGENTS.md` asks for the manifest to be updated in the *same commit* as the
-config change, so treat this as part of finishing that change rather than a
-follow-up chore.
+**Your job is to leave README.md matching the config.** Finding the drift is the
+first step, not the deliverable — if the manifest is wrong when you finish, the
+skill has not been used. `AGENTS.md` asks for the manifest to be updated in the
+*same commit* as the config change, so treat this as part of finishing that
+change.
 
-## Start by finding the drift
+The one case where you change nothing: the check below reports no drift. Then say
+so and stop. Rewriting accurate prose just to look busy makes the diff harder to
+review.
+
+## 1. Find the drift
 
 ```bash
-python3 .claude/skills/sync-manifest/scripts/check_manifest.py --repo . --versions
+python3 .claude/skills/sync-manifest/scripts/check_manifest.py --repo . --versions --suggest
 ```
 
 This compares package names in the nix files against the rows in each README
-table, and with `--versions` also resolves each Nix package's real version out of
-the pinned nixpkgs. It prints one line per problem and changes nothing. Drop
-`--versions` if you only touched package lists and want an instant answer; it
-shells out to `nix eval` and takes a few seconds.
+table, resolves each Nix package's real version out of the pinned nixpkgs
+(`--versions`), and prints a paste-ready row for anything missing, with the
+version and description looked up from the pinned nixpkgs or the Homebrew API
+(`--suggest`). It prints findings and edits nothing.
 
-Fix what it reports, then re-run until it says the manifest is in sync. Exit
-status is 0 when clean and 1 when drifted.
+Drop `--versions` if you only touched package lists and want an instant answer;
+it shells out to `nix eval` and takes a few seconds.
 
 The script is deliberately narrow: it checks names and versions, which are
-mechanical. It cannot tell you that a description is misleading or that a new
-macOS default went undocumented, so the sections below still need your eyes.
+mechanical. It cannot tell you that a description reads badly or that a new macOS
+default went undocumented, so step 2 still needs your eyes.
 
-## What mirrors what
+## 2. Edit README.md
+
+Work through what the script reported and fix each one:
+
+- **Package in the config, no README row** — add a row to the matching table.
+  Use the suggested row, but read the description before accepting it. Upstream
+  one-liners are sometimes verbose or oddly worded (ripgrep's mentions The Silver
+  Searcher, which means nothing to most readers); rewrite for someone skimming
+  the repo. A row whose description still says `COULD NOT CONFIRM` is not
+  finished — look it up or write plainly that it is unconfirmed.
+- **README row for a package no longer declared** — delete the row. If a section
+  ends up with no rows, delete the section and its heading too.
+- **Version mismatch** — update the number only. Don't rewrite the surrounding
+  note while you're there; the churn hides the real change.
+- **Commented-out package drift** — packages commented out in `home.packages`
+  belong in the README's "listed but commented out" sentence, not in a table,
+  since they aren't installed. Uncommenting one means moving it from that
+  sentence into the table, and commenting one out means the reverse.
+- **Version on a Homebrew row** — replace it with a description. Those packages
+  are unpinned and track upstream, so any number written down becomes a lie.
+
+Then check the sections the script can't diff, if your change touched them:
 
 | README section | Source of truth |
 | --- | --- |
@@ -47,11 +73,26 @@ macOS default went undocumented, so the sections below still need your eyes.
 | macOS system settings | `system.defaults` and `system.activationScripts` |
 | Where things are defined | the set of files in the repo root |
 
-Sections beyond the first three have no table to diff, so when you change
-`system.defaults`, an alias, a session variable or a Zed setting, go read the
-matching section and edit the sentence yourself.
+Only the first three have tables to diff. The rest are sentences, so if you
+changed `system.defaults`, an alias, a session variable or a Zed setting, go read
+the matching section and edit the prose yourself.
 
-## Getting versions right
+### Keep the prose that earns its place
+
+The manifest's value is the notes a bare list can't carry — that `pip` can't
+write into the read-only Nix store, that `pnpm setup` would fight the
+Nix-managed `.zshrc`, that the text-size setting needs Full Disk Access. Preserve
+that explanation when you touch a table, and when you add a package with a
+non-obvious wrinkle, add the wrinkle.
+
+Two things are load-bearing and easy to delete by accident:
+
+- The **`zap` warning** that rebuilds uninstall undeclared Homebrew packages.
+  `AGENTS.md` records that README carries this warning, so removing it makes that
+  note false.
+- The **credit to Kun Chen's dotfiles** the config is inspired by.
+
+### Getting versions right by hand
 
 Never write a version from memory or from what a tool reports on this machine —
 the manifest documents what a rebuild of *this* flake installs, which is whatever
@@ -62,49 +103,19 @@ these for you, but if you need one directly:
 nix eval --raw --impure --expr 'let p = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${builtins.currentSystem}; in p.nodejs.version'
 ```
 
-Homebrew packages are a different case: they are unpinned and track upstream, so
-any version written next to a brew or cask is guaranteed to become a lie. Give
-those a short description of what the thing *is* instead. The script flags a
-version-looking string in a Homebrew row for this reason.
-
-## Descriptions you don't already know
-
-If a package's purpose isn't obvious, look it up rather than guessing — a
-confidently wrong one-liner in a README is worse than none. For Homebrew:
+## 3. Re-run until clean
 
 ```bash
-curl -s https://formulae.brew.sh/api/formula/<name>.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["desc"])'
-# casks live at /api/cask/<name>.json and use "desc" too
+python3 .claude/skills/sync-manifest/scripts/check_manifest.py --repo . --versions
 ```
 
-For Nix packages, `pkgs.<name>.meta.description` through the same `nix eval`
-shape above. If a lookup fails, say plainly in the row that you couldn't confirm
-it rather than inventing something plausible.
+Keep going until it reports the manifest is in sync. It exits 0 when clean and 1
+when drifted, so that line is also the signal that you're done.
 
-## Keep the prose that earns its place
+## 4. Report
 
-The manifest's value is the notes a bare list can't carry — that `pip` can't
-write into the read-only Nix store, that `pnpm setup` would fight the
-Nix-managed `.zshrc`, that the text-size setting needs Full Disk Access. When you
-touch a table, preserve the surrounding explanation; when you add a package with
-a non-obvious wrinkle, add that wrinkle.
-
-Two things in the README are load-bearing and easy to delete by accident:
-
-- The **`zap` warning** that rebuilds uninstall undeclared Homebrew packages.
-  `AGENTS.md` records that README carries this warning, so removing it makes that
-  note false.
-- The **credit to Kun Chen's dotfiles** the config is inspired by.
-
-Commented-out packages get a sentence rather than table rows, since they aren't
-installed. When you uncomment one, move it into the table and out of that
-sentence; the script checks both halves.
-
-## Finishing
-
-Report which sections you changed and why, in a sentence or two. If you found
-drift the config change didn't cause — a version stale from an earlier flake
-update, say — mention it separately so it isn't mistaken for part of the current
-change. If something in the config has no natural home in the manifest, say so
-rather than forcing a row; a missing section is easier to spot than a misleading
-one.
+Say which sections you changed and why, in a sentence or two. If you found drift
+the current change didn't cause — a version stale from an earlier flake update,
+say — mention it separately so it isn't mistaken for part of this change. If
+something in the config has no natural home in the manifest, say so rather than
+forcing a row; a missing section is easier to spot than a misleading one.

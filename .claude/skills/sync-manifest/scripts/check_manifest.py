@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Report drift between the nix config and the manifest in README.md.
+"""Find where the README.md manifest disagrees with the nix config.
 
-Read-only by design: this prints findings and changes nothing. Fixing the README
-needs judgement about prose that a script would only flatten, so the script
-handles the part that is mechanical (which names and versions disagree) and
-leaves the writing to you.
+This never edits README.md. That is not timidity: the manifest earns its keep
+through notes a script cannot write, so the division of labour is that this
+finds the drift precisely and you write the fix. Run it, edit the README, run it
+again until it reports no drift.
 
 Usage:
-    python3 check_manifest.py [--repo DIR] [--versions]
+    python3 check_manifest.py [--repo DIR] [--versions] [--suggest]
+
+--suggest prints a ready-to-paste markdown row for every package that is
+missing from the README, with the version and description read from the
+authoritative source (the pinned nixpkgs, or the Homebrew API) so you are not
+inventing either. Treat the descriptions as a starting point and sharpen them.
 
 --versions additionally resolves each Nix package's real version out of the
 pinned nixpkgs and compares it to the version written in the README. It shells
@@ -131,37 +136,95 @@ def table_rows(lines: list[str]) -> list[tuple[str, str]]:
     return rows
 
 
-def resolve_versions(repo: Path, names: list[str]) -> dict[str, str | None]:
-    """Ask the pinned nixpkgs for each package's real version.
+def resolve_nix(repo: Path, names: list[str]) -> dict[str, dict]:
+    """Ask the pinned nixpkgs for each package's real version and description.
 
     Uses the flake's own nixpkgs input rather than whatever channel happens to
     be on the machine, because the README documents what a rebuild of *this*
     config installs. currentSystem keeps it working on Intel as well as ARM.
     """
+    nix_list = "[ " + " ".join(json.dumps(n) for n in names) + " ]"
     expr = """
     let
       flake = builtins.getFlake (toString %s);
       pkgs = flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
       at = name: builtins.foldl' (acc: k: if acc == null then null else acc.${k} or null)
              pkgs (pkgs.lib.splitString "." name);
-      version = name: let p = at name; in if p == null then null else (p.version or null);
+      info = name:
+        let p = at name; in
+        if p == null then null
+        else { version = p.version or null;
+               description = p.meta.description or null; };
     in builtins.toJSON (builtins.listToAttrs
-         (map (n: { name = n; value = version n; }) %s))
-    """ % (json.dumps(str(repo)),
-           "[ " + " ".join(json.dumps(n) for n in names) + " ]")
+         (map (n: { name = n; value = info n; }) %s))
+    """ % (json.dumps(str(repo)), nix_list)
     try:
         out = subprocess.run(
             ["nix", "eval", "--raw", "--impure", "--expr", expr],
             capture_output=True, text=True, timeout=300, cwd=repo,
         )
-    except FileNotFoundError:
-        print("  ! nix not on PATH; skipping version check\n", file=sys.stderr)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        print("  ! could not run nix; skipping version check", file=sys.stderr)
         return {}
     if out.returncode != 0:
         tail = out.stderr.strip().splitlines()[-3:]
         print("  ! could not evaluate versions:", " / ".join(tail), file=sys.stderr)
         return {}
-    return json.loads(out.stdout)
+    raw = json.loads(out.stdout)
+    return {k: v for k, v in raw.items() if v}
+
+
+def brew_desc(name: str, kind: str) -> str | None:
+    """Look up a brew or cask description from the Homebrew API.
+
+    Worth the network call because a confidently wrong one-liner in a README is
+    worse than an honest gap.
+    """
+    import urllib.error
+    import urllib.request
+    url = f"https://formulae.brew.sh/api/{kind}/{name}.json"
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            return json.load(r).get("desc")
+    except (urllib.error.URLError, json.JSONDecodeError, OSError, TimeoutError):
+        return None
+
+
+def suggest_rows(repo: Path, missing: dict[str, list[str]]) -> None:
+    """Print a paste-ready markdown row per missing package.
+
+    The columns mirror the tables already in README.md so a row drops straight
+    in. Versions and descriptions come from the pinned nixpkgs and the Homebrew
+    API rather than from guesswork; Homebrew rows carry no version because those
+    packages are unpinned and any number written down would rot.
+    """
+    print("\nsuggested rows — place each in its table, then sharpen the wording:")
+
+    nix_missing = missing.get("home.packages", [])
+    if nix_missing:
+        info = resolve_nix(repo, nix_missing)
+        print("\n  Languages and CLI tools — Nix")
+        for name in nix_missing:
+            got = info.get(name) or {}
+            version = got.get("version") or "?"
+            desc = got.get("description") or "COULD NOT CONFIRM — check by hand"
+            if not got:
+                desc = ("not found in the pinned nixpkgs — check the attribute "
+                        "name")
+            print(f"    | `{name}` | {version} | {desc} |")
+
+    for key, label, kind in (("brews", "CLI tools — Homebrew", "formula"),
+                             ("casks", "GUI apps — Homebrew casks", "cask")):
+        names = missing.get(key, [])
+        if not names:
+            continue
+        print(f"\n  {label}")
+        for name in names:
+            desc = brew_desc(name, kind) or "COULD NOT CONFIRM — check by hand"
+            print(f"    | `{name}` | {desc} |")
+
+    print("\n  Rows whose description says COULD NOT CONFIRM need a real one "
+          "before you commit.")
 
 
 def main() -> int:
@@ -169,6 +232,9 @@ def main() -> int:
     ap.add_argument("--repo", default=".", help="path to the nix config repo")
     ap.add_argument("--versions", action="store_true",
                     help="also check versions against the pinned nixpkgs (slower)")
+    ap.add_argument("--suggest", action="store_true",
+                    help="print ready-to-paste rows for packages missing from "
+                         "the README, with looked-up versions and descriptions")
     args = ap.parse_args()
 
     repo = Path(args.repo).resolve()
@@ -184,6 +250,7 @@ def main() -> int:
     }
 
     problems = []
+    missing: dict[str, list[str]] = {}
 
     for key, fragment in SECTIONS:
         lines = readme_section(readme, fragment)
@@ -194,6 +261,7 @@ def main() -> int:
         documented = {name for name, _ in table_rows(lines)}
         declared = set(in_nix[key])
         for name in sorted(declared - documented):
+            missing.setdefault(key, []).append(name)
             problems.append(f"{name} — in {key} but missing from the "
                             f"'{fragment}' table")
         for name in sorted(documented - declared):
@@ -227,7 +295,8 @@ def main() -> int:
     versions_checked = False
     if args.versions:
         nix_names = sorted(set(active))
-        real = resolve_versions(repo, nix_names)
+        info = resolve_nix(repo, nix_names)
+        real = {k: v["version"] for k, v in info.items()}
         if real:
             versions_checked = True
             lines = readme_section(readme, "Languages and CLI tools") or []
@@ -253,7 +322,13 @@ def main() -> int:
               f"{'s' if len(problems) != 1 else ''}):\n")
         for p in problems:
             print(f"  - {p}")
-        print("\nUpdate README.md so each section matches the config, then re-run.")
+        if args.suggest and missing:
+            suggest_rows(repo, missing)
+        elif missing and not args.suggest:
+            print("\nRe-run with --suggest for paste-ready rows with looked-up "
+                  "versions and descriptions.")
+        print("\nNow edit README.md so each section matches the config, then "
+              "re-run this until it reports no drift.")
         return 1
 
     checked = sum(len(v) for v in in_nix.values())
