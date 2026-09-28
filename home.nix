@@ -15,12 +15,28 @@ in
     #fzf       # fuzzy finder
     #jq        # json on the command line
     #lazygit
+    # languages, tracking whatever nixpkgs defaults to on the pinned channel.
+    # a channel bump can move these across majors; use python314 / nodejs_26 to pin.
+    python3     # 3.13.15 on nixpkgs 26.05
+    uv          # venvs + package installs for python (pip cant write to the nix store)
+    nodejs      # 24.19.0 on nixpkgs 26.05 (the LTS line)
+    pnpm        # 11.25.0, installed directly rather than through corepack
+
     # the font everything renders in
     nerd-fonts.hack
 
   ];
   fonts.fontconfig.enable = true;
-  home.sessionVariables.EDITOR = "zed";
+  home.sessionVariables = {
+    EDITOR = "zed";
+    # `npm -g` and `pnpm add -g` need a writable prefix; the nix store is read-only.
+    npm_config_prefix = "${config.home.homeDirectory}/.npm-global";
+    PNPM_HOME = "${config.home.homeDirectory}/Library/pnpm";  # pnpms own default on darwin
+  };
+  home.sessionPath = [
+    "${config.home.homeDirectory}/.npm-global/bin"
+    "${config.home.homeDirectory}/Library/pnpm"
+  ];
 
   # Zed itself is installed by the Homebrew cask; Home Manager only manages its config.
   programs.zed-editor = {
