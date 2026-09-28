@@ -1,10 +1,16 @@
-{ config, lib, pkgs, user, ... }:
+{ config, inputs, lib, pkgs, user, ... }:
 
 let
   nixConfig = "${config.home.homeDirectory}/.nix-config";
 
   # Not in nixpkgs; packaged from the published npm tarball. See ccstatusline.nix.
   ccstatusline = pkgs.callPackage ./ccstatusline.nix { };
+
+  # Built against the flake's own nixpkgs on purpose - see the input comment in
+  # flake.nix. Derived from hostPlatform rather than written out again, so the
+  # architecture stays named in exactly one place.
+  claude-code =
+    inputs.claude-code-nix.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 
 {
@@ -25,7 +31,8 @@ in
     nodejs      # 24.19.0 on nixpkgs 26.05 (the LTS line)
     pnpm        # 11.25.0, installed directly rather than through corepack
 
-    # claude code statusline; wired into ~/.claude/settings.json below
+    # claude code, and the statusline wired into ~/.claude/settings.json below
+    claude-code
     ccstatusline
 
     # the font everything renders in

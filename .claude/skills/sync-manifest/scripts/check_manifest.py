@@ -192,7 +192,60 @@ def resolve_nix(repo: Path, names: list[str],
         print("  ! could not evaluate versions:", " / ".join(tail), file=sys.stderr)
         return {}
     raw = json.loads(out.stdout)
-    return {k: v for k, v in raw.items() if v}
+    return {k: dict(v, source="nixpkgs") for k, v in raw.items() if v}
+
+
+def resolve_from_config(repo: Path) -> dict[str, dict]:
+    """Version and description of everything the config actually installs.
+
+    Keyed by pname. This is the authoritative answer - it is the real evaluated
+    home.packages list - and it is how packages that do not come from nixpkgs at
+    all get resolved: flake inputs, overlays, derivations built in this repo.
+    Evaluating the whole system is slower than one attribute lookup, so it is
+    only used for names the nixpkgs lookup could not find.
+    """
+    expr = """
+    let
+      flake = builtins.getFlake (toString %s);
+      cfgName = builtins.head (builtins.attrNames flake.darwinConfigurations);
+      users = flake.darwinConfigurations.${cfgName}.config.home-manager.users;
+      userName = builtins.head (builtins.attrNames users);
+      entry = p: {
+        name = p.pname or p.name;
+        value = { version = p.version or null;
+                  description = p.meta.description or null; };
+      };
+    in builtins.toJSON (builtins.listToAttrs
+         (map entry users.${userName}.home.packages))
+    """ % json.dumps(str(repo))
+    try:
+        out = subprocess.run(
+            ["nix", "eval", "--raw", "--impure", "--expr", expr],
+            capture_output=True, text=True, timeout=600, cwd=repo,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {}
+    if out.returncode != 0:
+        tail = out.stderr.strip().splitlines()[-3:]
+        print("  ! could not evaluate the config:", " / ".join(tail),
+              file=sys.stderr)
+        return {}
+    return {k: v for k, v in json.loads(out.stdout).items() if v}
+
+
+def resolve(repo: Path, names: list[str],
+            local: dict[str, str] | None = None) -> dict[str, dict]:
+    """Resolve versions for `names`, preferring what the config really installs."""
+    from_config = resolve_from_config(repo)
+    resolved = {n: dict(from_config[n], source="config")
+                for n in names if n in from_config}
+
+    # Names the config does not install - commented-out packages, say - can still
+    # be looked up in nixpkgs so a suggested row has something useful in it.
+    leftover = [n for n in names if n not in resolved]
+    if leftover:
+        resolved.update(resolve_nix(repo, leftover, local))
+    return resolved
 
 
 def brew_desc(name: str, kind: str) -> str | None:
@@ -225,7 +278,7 @@ def suggest_rows(repo: Path, missing: dict[str, list[str]],
     missing_local = local or {}
     nix_missing = missing.get("home.packages", [])
     if nix_missing:
-        info = resolve_nix(repo, nix_missing, missing_local)
+        info = resolve(repo, nix_missing, missing_local)
         print("\n  Languages and CLI tools — Nix")
         for name in nix_missing:
             got = info.get(name) or {}
@@ -321,7 +374,7 @@ def main() -> int:
     versions_checked = False
     if args.versions:
         nix_names = sorted(set(active))
-        info = resolve_nix(repo, nix_names, local_pkgs)
+        info = resolve(repo, nix_names, local_pkgs)
         real = {k: v["version"] for k, v in info.items()}
         if real:
             versions_checked = True
@@ -336,8 +389,12 @@ def main() -> int:
                     problems.append(f"{name} — documented but no version found"
                                     f"{where}")
                 elif written and written != actual:
-                    src = (local_pkgs[name] if name in local_pkgs
-                           else "the pinned nixpkgs")
+                    src = (
+                        local_pkgs[name] if name in local_pkgs
+                        else "the pinned nixpkgs"
+                        if (info.get(name) or {}).get("source") == "nixpkgs"
+                        else "the config"
+                    )
                     problems.append(f"{name} — README says {written}, "
                                     f"{src} has {actual}")
             for name in nix_names:

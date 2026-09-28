@@ -26,11 +26,11 @@ On a machine whose macOS username isn't `jordanphillips`, change the single
 
 ## Manifest
 
-Everything below is installed or configured by a rebuild. Nix versions are what
-nixpkgs 26.05 currently pins and move when the channel is bumped; Homebrew
-packages always track whatever Homebrew has today. The one exception is
-`ccstatusline`, which is pinned by hand in `ccstatusline.nix` because it isn't in
-nixpkgs — a channel bump won't move it.
+Everything below is installed or configured by a rebuild. Most Nix versions are
+what nixpkgs 26.05 currently pins and move when the channel is bumped; Homebrew
+packages always track whatever Homebrew has today. Two packages come from outside
+the channel, so a nixpkgs bump does not touch them: `claude-code` follows its own
+flake input, and `ccstatusline` is pinned by hand in `ccstatusline.nix`.
 
 ### Languages and CLI tools — Nix
 
@@ -40,10 +40,33 @@ nixpkgs — a channel bump won't move it.
 | `uv` | 0.11.21 | Venvs and package installs — `pip` can't write into the read-only Nix store |
 | `nodejs` | 24.19.0 | The LTS line, again the nixpkgs default |
 | `pnpm` | 11.25.0 | Installed directly rather than through corepack |
+| `claude-code` | 2.1.284 | The CLI, from the [claude-code-nix](https://github.com/sadjow/claude-code-nix) flake — see below |
 | `ccstatusline` | 2.2.30 | Claude Code status line. Not in nixpkgs — packaged from the npm tarball by `ccstatusline.nix` |
 
 `ripgrep`, `fd`, `fzf`, `jq` and `lazygit` are listed but commented out in
 `home.nix` — uncomment to pick them up.
+
+#### Why claude-code comes from a flake
+
+Not from Homebrew, and not from nixpkgs — which lags, at 2.1.223 on this pin.
+[claude-code-nix](https://github.com/sadjow/claude-code-nix) publishes releases
+within the hour and ships a self-contained native binary.
+
+The input deliberately does **not** follow this config's nixpkgs. Overriding it
+would change the derivation hash, missing the project's binary cache, and upstream
+only tests against its own pin. The cost is a second nixpkgs in `flake.lock`.
+
+The package disables Claude Code's own auto-updater, so `claude` will not update
+itself. Bump it deliberately:
+
+```bash
+nix flake update claude-code-nix && ./build.sh
+```
+
+Its optional Cachix cache is `claude-code.cachix.org`. Note that `nix.settings`
+can't add it here, since `nix.enable = false` leaves the daemon to Determinate —
+it would have to go in Determinate's own config. Skipping it just means Nix
+downloads the release binary from Anthropic's CDN instead, at similar cost.
 
 ### CLI tools — Homebrew
 
@@ -55,8 +78,7 @@ nixpkgs — a channel bump won't move it.
 
 | Cask | What it is |
 | --- | --- |
-| `claude` | Claude desktop app |
-| `claude-code` | Claude Code desktop app |
+| `claude` | Claude desktop app (the CLI comes from Nix, above) |
 | `ghostty` | Terminal emulator |
 | `karabiner-elements` | Keyboard remapper |
 | `slack` | Chat |
@@ -137,7 +159,7 @@ it the switch prints a warning and continues rather than failing.
 
 | File | Scope |
 | --- | --- |
-| `flake.nix` | Inputs pinned to the 26.05 release line, the `user` name, and the `mac` system output |
+| `flake.nix` | Inputs (26.05 release line, plus `claude-code-nix` on its own), the `user` name, and the `mac` system output |
 | `configuration.nix` | System-wide: macOS defaults, Homebrew packages, activation scripts |
 | `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, Claude Code status line |
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |

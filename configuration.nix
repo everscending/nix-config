@@ -59,8 +59,7 @@
     ];
     casks = [
       "karabiner-elements"
-      "claude"
-      "claude-code"
+      "claude"        # desktop app; the CLI comes from claude-code-nix
       "ghostty"
       "slack"
       "zed"

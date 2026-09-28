@@ -13,9 +13,16 @@
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+
+    # Claude Code from its own flake instead of the Homebrew cask: releases land
+    # within the hour and the binary is self-contained. Deliberately NOT following
+    # our nixpkgs - overriding it changes the derivation hash, which misses the
+    # project's Cachix cache, and upstream only tests against its own pin.
+    claude-code-nix.url = "github:sadjow/claude-code-nix";
   };
 
-  outputs = inputs@{ self, nix-darwin, nix-homebrew, home-manager, nixpkgs }:
+  outputs = inputs@{ self, nix-darwin, nix-homebrew, home-manager, nixpkgs
+    , claude-code-nix }:
     let
       # The one username line to change if this isn't your machine.
       # bootstrap.sh offers to rewrite this for you if your macOS username differs.
@@ -32,7 +39,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.extraSpecialArgs = { inherit user; };
+            home-manager.extraSpecialArgs = { inherit user inputs; };
             home-manager.users.${user} = import ./home.nix;
           } 
       ];
