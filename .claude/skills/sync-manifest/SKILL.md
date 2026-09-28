@@ -48,6 +48,11 @@ Work through what the script reported and fix each one:
   Searcher, which means nothing to most readers); rewrite for someone skimming
   the repo. A row whose description still says `COULD NOT CONFIRM` is not
   finished — look it up or write plainly that it is unconfirmed.
+- **A package this repo builds itself** — a `let` binding like
+  `ccstatusline = pkgs.callPackage ./ccstatusline.nix { }` is not in nixpkgs, so
+  its version is pinned by hand in that file and a channel bump won't move it.
+  Say so in the row, and name the file that pins it, so the next person knows
+  where to bump it.
 - **README row for a package no longer declared** — delete the row. If a section
   ends up with no rows, delete the section and its heading too.
 - **Version mismatch** — update the number only. Don't rewrite the surrounding

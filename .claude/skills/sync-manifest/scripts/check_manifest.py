@@ -90,6 +90,18 @@ def parse_home_packages(text: str) -> tuple[list[str], list[str]]:
     return active, commented
 
 
+def parse_local_packages(text: str) -> dict[str, str]:
+    """Return {name: file} for packages this repo builds itself.
+
+    A `let` binding like `ccstatusline = pkgs.callPackage ./ccstatusline.nix { }`
+    is a package that will never be found in nixpkgs, so looking it up there
+    would report a problem that isn't one. Its version lives in the .nix file.
+    """
+    return dict(re.findall(
+        r"^\s*([A-Za-z0-9_-]+)\s*=\s*pkgs\.callPackage\s+\./([^\s]+)\s*\{",
+        text, re.M))
+
+
 def parse_quoted_list(text: str, key: str) -> list[str]:
     body = nix_list_block(text, re.compile(rf"\b{key}\s*=\s*\["))
     names = []
@@ -136,28 +148,37 @@ def table_rows(lines: list[str]) -> list[tuple[str, str]]:
     return rows
 
 
-def resolve_nix(repo: Path, names: list[str]) -> dict[str, dict]:
+def resolve_nix(repo: Path, names: list[str],
+                local: dict[str, str] | None = None) -> dict[str, dict]:
     """Ask the pinned nixpkgs for each package's real version and description.
 
     Uses the flake's own nixpkgs input rather than whatever channel happens to
     be on the machine, because the README documents what a rebuild of *this*
     config installs. currentSystem keeps it working on Intel as well as ARM.
     """
+    local = local or {}
     nix_list = "[ " + " ".join(json.dumps(n) for n in names) + " ]"
+    local_attrs = " ".join(
+        f"{json.dumps(n)} = {json.dumps(f)};" for n, f in local.items())
     expr = """
     let
       flake = builtins.getFlake (toString %s);
       pkgs = flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
       at = name: builtins.foldl' (acc: k: if acc == null then null else acc.${k} or null)
              pkgs (pkgs.lib.splitString "." name);
-      info = name:
-        let p = at name; in
+      repo = %s;
+      local = { %s };
+      describe = p:
         if p == null then null
         else { version = p.version or null;
                description = p.meta.description or null; };
+      info = name:
+        if local ? ${name}
+        then describe (pkgs.callPackage (repo + "/" + local.${name}) { })
+        else describe (at name);
     in builtins.toJSON (builtins.listToAttrs
          (map (n: { name = n; value = info n; }) %s))
-    """ % (json.dumps(str(repo)), nix_list)
+    """ % (json.dumps(str(repo)), json.dumps(str(repo)), local_attrs, nix_list)
     try:
         out = subprocess.run(
             ["nix", "eval", "--raw", "--impure", "--expr", expr],
@@ -190,7 +211,8 @@ def brew_desc(name: str, kind: str) -> str | None:
         return None
 
 
-def suggest_rows(repo: Path, missing: dict[str, list[str]]) -> None:
+def suggest_rows(repo: Path, missing: dict[str, list[str]],
+                 local: dict[str, str] | None = None) -> None:
     """Print a paste-ready markdown row per missing package.
 
     The columns mirror the tables already in README.md so a row drops straight
@@ -200,9 +222,10 @@ def suggest_rows(repo: Path, missing: dict[str, list[str]]) -> None:
     """
     print("\nsuggested rows — place each in its table, then sharpen the wording:")
 
+    missing_local = local or {}
     nix_missing = missing.get("home.packages", [])
     if nix_missing:
-        info = resolve_nix(repo, nix_missing)
+        info = resolve_nix(repo, nix_missing, missing_local)
         print("\n  Languages and CLI tools — Nix")
         for name in nix_missing:
             got = info.get(name) or {}
@@ -211,6 +234,8 @@ def suggest_rows(repo: Path, missing: dict[str, list[str]]) -> None:
             if not got:
                 desc = ("not found in the pinned nixpkgs — check the attribute "
                         "name")
+            elif name in missing_local:
+                desc = f"{desc} (packaged locally by {missing_local[name]})"
             print(f"    | `{name}` | {version} | {desc} |")
 
     for key, label, kind in (("brews", "CLI tools — Homebrew", "formula"),
@@ -243,6 +268,7 @@ def main() -> int:
     readme = read(repo / "README.md")
 
     active, commented = parse_home_packages(home)
+    local_pkgs = parse_local_packages(home)
     in_nix = {
         "home.packages": [p for p in active if not PROSE_DOCUMENTED.match(p)],
         "brews": parse_quoted_list(config, "brews"),
@@ -295,7 +321,7 @@ def main() -> int:
     versions_checked = False
     if args.versions:
         nix_names = sorted(set(active))
-        info = resolve_nix(repo, nix_names)
+        info = resolve_nix(repo, nix_names, local_pkgs)
         real = {k: v["version"] for k, v in info.items()}
         if real:
             versions_checked = True
@@ -303,11 +329,17 @@ def main() -> int:
             for name, written in table_rows(lines):
                 actual = real.get(name)
                 if actual is None:
-                    problems.append(f"{name} — documented but not a package in "
-                                    "the pinned nixpkgs; check the attribute name")
+                    where = ("; it is built by "
+                             f"{local_pkgs[name]}, so check the version there"
+                             if name in local_pkgs else
+                             " in the pinned nixpkgs; check the attribute name")
+                    problems.append(f"{name} — documented but no version found"
+                                    f"{where}")
                 elif written and written != actual:
-                    problems.append(f"{name} — README says {written}, pinned "
-                                    f"nixpkgs has {actual}")
+                    src = (local_pkgs[name] if name in local_pkgs
+                           else "the pinned nixpkgs")
+                    problems.append(f"{name} — README says {written}, "
+                                    f"{src} has {actual}")
             for name in nix_names:
                 if PROSE_DOCUMENTED.match(name) and real.get(name):
                     if real[name] not in readme:
@@ -323,7 +355,7 @@ def main() -> int:
         for p in problems:
             print(f"  - {p}")
         if args.suggest and missing:
-            suggest_rows(repo, missing)
+            suggest_rows(repo, missing, local_pkgs)
         elif missing and not args.suggest:
             print("\nRe-run with --suggest for paste-ready rows with looked-up "
                   "versions and descriptions.")

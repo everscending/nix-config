@@ -1,7 +1,10 @@
-{ config, pkgs, user, ... }:
+{ config, lib, pkgs, user, ... }:
 
 let
   nixConfig = "${config.home.homeDirectory}/.nix-config";
+
+  # Not in nixpkgs; packaged from the published npm tarball. See ccstatusline.nix.
+  ccstatusline = pkgs.callPackage ./ccstatusline.nix { };
 in
 
 {
@@ -22,6 +25,9 @@ in
     nodejs      # 24.19.0 on nixpkgs 26.05 (the LTS line)
     pnpm        # 11.25.0, installed directly rather than through corepack
 
+    # claude code statusline; wired into ~/.claude/settings.json below
+    ccstatusline
+
     # the font everything renders in
     nerd-fonts.hack
 
@@ -37,6 +43,23 @@ in
     "${config.home.homeDirectory}/.npm-global/bin"
     "${config.home.homeDirectory}/Library/pnpm"
   ];
+
+  # Point Claude Code at ccstatusline. This runs during home-manager activation,
+  # which the generated activate script sequences after the Homebrew bundle, so
+  # the claude-code cask is already installed by the time we get here.
+  #
+  # ~/.claude/settings.json is shared with Claude Code and edited by hand, so
+  # this merges rather than writes: it sets only `type` and `command` - where the
+  # binary is, which is Nix's business - and leaves everything else alone,
+  # including cosmetic statusLine keys like `padding` and `refreshInterval` that
+  # ccstatusline's own TUI manages. The tool's config lives in
+  # ~/.config/ccstatusline/settings.json and is not touched here.
+  home.activation.claudeStatusLine =
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      ${lib.getExe pkgs.python3} ${./claude-statusline.py} \
+        "${config.home.homeDirectory}/.claude/settings.json" \
+        "${ccstatusline}/bin/ccstatusline"
+    '';
 
   # Zed itself is installed by the Homebrew cask; Home Manager only manages its config.
   programs.zed-editor = {

@@ -28,7 +28,9 @@ On a machine whose macOS username isn't `jordanphillips`, change the single
 
 Everything below is installed or configured by a rebuild. Nix versions are what
 nixpkgs 26.05 currently pins and move when the channel is bumped; Homebrew
-packages always track whatever Homebrew has today.
+packages always track whatever Homebrew has today. The one exception is
+`ccstatusline`, which is pinned by hand in `ccstatusline.nix` because it isn't in
+nixpkgs — a channel bump won't move it.
 
 ### Languages and CLI tools — Nix
 
@@ -38,6 +40,7 @@ packages always track whatever Homebrew has today.
 | `uv` | 0.11.21 | Venvs and package installs — `pip` can't write into the read-only Nix store |
 | `nodejs` | 24.19.0 | The LTS line, again the nixpkgs default |
 | `pnpm` | 11.25.0 | Installed directly rather than through corepack |
+| `ccstatusline` | 2.2.30 | Claude Code status line. Not in nixpkgs — packaged from the npm tarball by `ccstatusline.nix` |
 
 `ripgrep`, `fd`, `fzf`, `jq` and `lazygit` are listed but commented out in
 `home.nix` — uncomment to pick them up.
@@ -58,6 +61,30 @@ packages always track whatever Homebrew has today.
 | `karabiner-elements` | Keyboard remapper |
 | `slack` | Chat |
 | `zed` | Code editor |
+
+### Claude Code status line
+
+A rebuild points Claude Code at `ccstatusline` by merging a `statusLine` block
+into `~/.claude/settings.json`:
+
+```json
+"statusLine": { "type": "command", "command": "/nix/store/…/bin/ccstatusline" }
+```
+
+This runs during home-manager activation, which the generated activate script
+sequences after the Homebrew bundle — so the `claude-code` cask is already
+installed by the time the status line is wired up.
+
+That settings file is shared with Claude Code and edited by hand, so
+`claude-statusline.py` merges rather than writes. It sets only `type` and
+`command` — where the binary lives, which is the part Nix knows — and leaves
+everything else untouched, including unrelated keys like `hooks` and `theme` and
+the cosmetic `statusLine` keys (`padding`, `refreshInterval`) that ccstatusline's
+own TUI manages. A malformed `settings.json` is left alone with a warning rather
+than replaced, and a failure there won't abort the rest of the rebuild.
+
+Run `ccstatusline` to open its configuration TUI. Its own settings live in
+`~/.config/ccstatusline/settings.json`, which this config does not manage.
 
 ### Fonts
 
@@ -112,7 +139,9 @@ it the switch prints a warning and continues rather than failing.
 | --- | --- |
 | `flake.nix` | Inputs pinned to the 26.05 release line, the `user` name, and the `mac` system output |
 | `configuration.nix` | System-wide: macOS defaults, Homebrew packages, activation scripts |
-| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed |
+| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, Claude Code status line |
+| `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |
+| `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
 | `build.sh` | Applies the config |
 | `flake.lock` | Exact input revisions — commit changes to this |
 
