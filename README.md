@@ -13,8 +13,9 @@ Inspired by [Kun Chen's dotfiles](https://github.com/kunchenguid/dotfiles).
 1. Install Nix — https://github.com/DeterminateSystems/nix-installer
 2. Run `./build.sh`
 
-That runs `sudo nix run nix-darwin -- switch --flake .#mac`. Open a **new** shell
-afterwards; PATH and environment changes are only picked up at shell startup.
+That resolves any new flake inputs, then runs
+`sudo nix run nix-darwin -- switch --flake .#mac`. Open a **new** shell afterwards;
+PATH and environment changes are only picked up at shell startup.
 
 On a machine whose macOS username isn't `jordanphillips`, change the single
 `user = ` line in `flake.nix`.
@@ -164,7 +165,7 @@ it the switch prints a warning and continues rather than failing.
 | `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, Claude Code status line |
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |
 | `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
-| `build.sh` | Applies the config |
+| `build.sh` | Locks new inputs as you, then applies the config as root |
 | `flake.lock` | Exact input revisions — commit changes to this |
 
 `nix.enable = false` because the Determinate installer already manages the Nix
