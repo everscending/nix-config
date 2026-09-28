@@ -17,6 +17,10 @@ That resolves any new flake inputs, then runs
 `sudo nix run nix-darwin -- switch --flake .#mac`. Open a **new** shell afterwards;
 PATH and environment changes are only picked up at shell startup.
 
+To update, run `./update.sh` (every input) or `./update.sh <input>` (just that
+one), then `./build.sh`. It runs `nix flake update`, carries the new version
+numbers into the manifest below, and commits both — it doesn't push.
+
 On a machine whose macOS username isn't `jordanphillips`, change the single
 `user = ` line in `flake.nix`.
 
@@ -49,7 +53,7 @@ flake input, and `ccstatusline` is pinned by hand in `ccstatusline.nix`.
 
 #### Why claude-code comes from a flake
 
-Not from Homebrew, and not from nixpkgs — which lags, at 2.1.223 on this pin.
+Not from Homebrew, and not from nixpkgs, whose copy lags behind releases.
 [claude-code-nix](https://github.com/sadjow/claude-code-nix) publishes releases
 within the hour and ships a self-contained native binary.
 
@@ -61,7 +65,7 @@ The package disables Claude Code's own auto-updater, so `claude` will not update
 itself. Bump it deliberately:
 
 ```bash
-nix flake update claude-code-nix && ./build.sh
+./update.sh claude-code-nix && ./build.sh
 ```
 
 Its optional Cachix cache is `claude-code.cachix.org`. Note that `nix.settings`
@@ -166,7 +170,8 @@ it the switch prints a warning and continues rather than failing.
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |
 | `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
 | `build.sh` | Locks new inputs as you, then applies the config as root |
+| `update.sh` | Updates inputs, fixes manifest versions, commits both |
 | `flake.lock` | Exact input revisions — commit changes to this |
 
 `nix.enable = false` because the Determinate installer already manages the Nix
-daemon. Update pinned inputs with `nix flake update`.
+daemon. Update pinned inputs with `./update.sh`.

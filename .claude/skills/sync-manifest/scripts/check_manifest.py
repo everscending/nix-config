@@ -305,6 +305,43 @@ def suggest_rows(repo: Path, missing: dict[str, list[str]],
           "before you commit.")
 
 
+def fix_versions(readme: str, real: dict[str, str]) -> tuple[str, list[str]]:
+    """Rewrite stale version numbers in README.md, and nothing else.
+
+    Versions are the one part of the manifest that is purely mechanical - after
+    a `nix flake update` the right answer is simply whatever the config now
+    installs - so this is the one edit the script makes itself. Names,
+    descriptions and prose are left for a person or agent to write.
+    """
+    out, changes, in_table = [], [], False
+    for line in readme.splitlines(keepends=True):
+        if line.startswith("#"):
+            in_table = "Languages and CLI tools" in line
+        if in_table and line.lstrip().startswith("|"):
+            cells = line.strip().strip("|").split("|")
+            if len(cells) >= 2:
+                name = cells[0].strip().strip("`")
+                old, new = cells[1].strip(), real.get(name)
+                if new and old and old != new and re.fullmatch(r"[\w.+\-]+", old):
+                    cells[1] = cells[1].replace(old, new, 1)
+                    newline = "\n" if line.endswith("\n") else ""
+                    line = "|" + "|".join(cells) + "|" + newline
+                    changes.append(f"{name} {old} -> {new}")
+        out.append(line)
+    text = "".join(out)
+
+    # Prose-documented packages (the font) carry their version in parentheses.
+    for name, new in real.items():
+        if not PROSE_DOCUMENTED.match(name):
+            continue
+        pat = re.compile(r"(`%s`\s*\()([^)]+)(\))" % re.escape(name))
+        m = pat.search(text)
+        if m and m.group(2) != new:
+            changes.append(f"{name} {m.group(2)} -> {new}")
+            text = pat.sub(lambda m: m.group(1) + new + m.group(3), text, count=1)
+    return text, changes
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=".", help="path to the nix config repo")
@@ -313,7 +350,12 @@ def main() -> int:
     ap.add_argument("--suggest", action="store_true",
                     help="print ready-to-paste rows for packages missing from "
                          "the README, with looked-up versions and descriptions")
+    ap.add_argument("--fix-versions", action="store_true",
+                    help="rewrite stale version numbers in README.md in place "
+                         "(implies --versions); prints one 'fixed:' line each")
     args = ap.parse_args()
+    if args.fix_versions:
+        args.versions = True
 
     repo = Path(args.repo).resolve()
     home = read(repo / "home.nix")
@@ -378,6 +420,12 @@ def main() -> int:
         real = {k: v["version"] for k, v in info.items()}
         if real:
             versions_checked = True
+            if args.fix_versions:
+                readme, changes = fix_versions(readme, real)
+                if changes:
+                    (repo / "README.md").write_text(readme)
+                for c in changes:
+                    print(f"fixed: {c}")
             lines = readme_section(readme, "Languages and CLI tools") or []
             for name, written in table_rows(lines):
                 actual = real.get(name)

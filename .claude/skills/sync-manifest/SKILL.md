@@ -56,7 +56,8 @@ Work through what the script reported and fix each one:
 - **README row for a package no longer declared** — delete the row. If a section
   ends up with no rows, delete the section and its heading too.
 - **Version mismatch** — update the number only. Don't rewrite the surrounding
-  note while you're there; the churn hides the real change.
+  note while you're there; the churn hides the real change. `--fix-versions` does
+  exactly this in place, and is what `./update.sh` runs after `nix flake update`.
 - **Commented-out package drift** — packages commented out in `home.packages`
   belong in the README's "listed but commented out" sentence, not in a table,
   since they aren't installed. Uncommenting one means moving it from that
