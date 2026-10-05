@@ -33,9 +33,9 @@ On a machine whose macOS username isn't `jordanphillips`, change the single
 
 Everything below is installed or configured by a rebuild. Most Nix versions are
 what nixpkgs 26.05 currently pins and move when the channel is bumped; Homebrew
-packages always track whatever Homebrew has today. Two packages come from outside
-the channel, so a nixpkgs bump does not touch them: `claude-code` follows its own
-flake input, and `ccstatusline` is pinned by hand in `ccstatusline.nix`.
+packages always track whatever Homebrew has today. Three packages come from outside
+the channel, so a nixpkgs bump does not touch them: `claude-code` and `codex` follow
+their own flake inputs, and `ccstatusline` is pinned by hand in `ccstatusline.nix`.
 
 ### Languages and CLI tools — Nix
 
@@ -46,30 +46,33 @@ flake input, and `ccstatusline` is pinned by hand in `ccstatusline.nix`.
 | `nodejs` | 24.19.0 | The LTS line, again the nixpkgs default |
 | `pnpm` | 11.25.0 | Installed directly rather than through corepack |
 | `claude-code` | 2.1.284 | The CLI, from the [claude-code-nix](https://github.com/sadjow/claude-code-nix) flake — see below |
+| `codex` | 0.160.1 | The Codex CLI, from the [codex-cli-nix](https://github.com/sadjow/codex-cli-nix) flake — see below |
 | `ccstatusline` | 2.2.30 | Claude Code status line. Not in nixpkgs — packaged from the npm tarball by `ccstatusline.nix` |
 | `gh` | 2.100.0 | GitHub CLI, set up by `programs.gh` — see below |
 
 `ripgrep`, `fd`, `fzf`, `jq` and `lazygit` are listed but commented out in
 `home.nix` — uncomment to pick them up.
 
-#### Why claude-code comes from a flake
+#### Why claude-code and codex come from flakes
 
-Not from Homebrew, and not from nixpkgs, whose copy lags behind releases.
-[claude-code-nix](https://github.com/sadjow/claude-code-nix) publishes releases
-within the hour and ships a self-contained native binary.
+Not from Homebrew, and not from nixpkgs, whose copies lag behind releases.
+[claude-code-nix](https://github.com/sadjow/claude-code-nix) and
+[codex-cli-nix](https://github.com/sadjow/codex-cli-nix), from the same maintainer,
+publish new releases quickly and ship self-contained native binaries. Each desktop
+app still comes from Homebrew; only the CLIs come from these flakes.
 
-The input deliberately does **not** follow this config's nixpkgs. Overriding it
-would change the derivation hash, missing the project's binary cache, and upstream
-only tests against its own pin. The cost is a second nixpkgs in `flake.lock`.
+Neither input follows this config's nixpkgs, deliberately. Overriding it would
+change the derivation hash, missing each project's binary cache, and upstream only
+tests against its own pin. The cost is extra nixpkgs copies in `flake.lock`.
 
-The package disables Claude Code's own auto-updater, so `claude` will not update
-itself. Bump it deliberately:
+Both packages disable the tool's own auto-updater, so `claude` and `codex` will not
+update themselves. Bump them deliberately — together, or name just one:
 
 ```bash
-./update.sh claude-code-nix && ./build.sh
+./update.sh claude-code-nix codex-cli-nix && ./build.sh
 ```
 
-Its optional Cachix cache is `claude-code.cachix.org`. Note that `nix.settings`
+claude-code-nix's optional Cachix cache is `claude-code.cachix.org`. Note that `nix.settings`
 can't add it here, since `nix.enable = false` leaves the daemon to Determinate —
 it would have to go in Determinate's own config. Skipping it just means Nix
 downloads the release binary from Anthropic's CDN instead, at similar cost.
@@ -85,6 +88,7 @@ downloads the release binary from Anthropic's CDN instead, at similar cost.
 | Cask | What it is |
 | --- | --- |
 | `claude` | Claude desktop app (the CLI comes from Nix, above) |
+| `codex-app` | Codex desktop app (the CLI comes from Nix, above) |
 | `ghostty` | Terminal emulator |
 | `karabiner-elements` | Keyboard remapper |
 | `slack` | Chat |
@@ -100,8 +104,8 @@ into `~/.claude/settings.json`:
 ```
 
 This runs during home-manager activation, which the generated activate script
-sequences after the Homebrew bundle — so the `claude-code` cask is already
-installed by the time the status line is wired up.
+sequences after the Homebrew bundle and after packages are linked — so Claude
+Code is already installed by the time the status line is wired up.
 
 That settings file is shared with Claude Code and edited by hand, so
 `claude-statusline.py` merges rather than writes. It sets only `type` and
@@ -118,14 +122,15 @@ Run `ccstatusline` to open its configuration TUI. Its own settings live in
 
 [mattpocock/skills](https://github.com/mattpocock/skills) — 38 agent skills such as
 `tdd`, `diagnosing-bugs` and `grill-me` — are installed with the cross-agent
-installer, `npx skills@latest add mattpocock/skills -g`. That keeps one copy in
-`~/.agents/skills` and links it into each coding agent it finds; today that's Claude
-Code, via `~/.claude/skills`.
+installer, `npx skills@latest add mattpocock/skills -g`, for both agents. One copy
+lands in `~/.agents/skills`, which Codex reads directly; Claude Code gets a link per
+skill in `~/.claude/skills`.
 
-This runs at the end of home-manager activation, after Node and Claude Code are
-installed. The installer decides Claude Code is present by whether `~/.claude`
-exists, so it runs after the status-line step, which creates that directory on a
-fresh machine.
+This runs at the end of home-manager activation, after Node, Claude Code and Codex
+are installed. Both agents are named explicitly (`-a claude-code codex`) instead of
+left to the installer's auto-detection, which only counts an agent as present once
+its `~/.claude` or `~/.codex` folder exists — on a fresh machine, not until you first
+run it.
 
 It installs **once**. Running the installer again overwrites the skill files, and
 they're meant to be edited, so later rebuilds see the existing install (recorded in
@@ -136,9 +141,9 @@ npx skills update -g
 ```
 
 Because it needs the network, a failed install prints a warning and the rest of
-the rebuild carries on; the next `./build.sh` tries again. If you later add another
-agent, such as Codex, run `npx skills add mattpocock/skills -g` once by hand to link
-the skills into it too.
+the rebuild carries on; the next `./build.sh` tries again. To link the skills into
+another agent later, run `npx skills add mattpocock/skills -g -a <agent>` once by
+hand; note that, like any re-run of `add`, it refreshes the skill files.
 
 Then run `/setup-matt-pocock-skills` in each repo you use them in. It asks which
 issue tracker and labels you use.
@@ -222,7 +227,7 @@ it the switch prints a warning and continues rather than failing.
 
 | File | Scope |
 | --- | --- |
-| `flake.nix` | Inputs (26.05 release line, plus `claude-code-nix` on its own), the `user` name, and the `mac` system output |
+| `flake.nix` | Inputs (26.05 release line, plus `claude-code-nix` and `codex-cli-nix` on their own), the `user` name, and the `mac` system output |
 | `configuration.nix` | System-wide: macOS defaults, Homebrew packages, activation scripts |
 | `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, gh and git, Claude Code status line, Matt Pocock's skills |
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |

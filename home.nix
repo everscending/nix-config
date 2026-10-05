@@ -11,6 +11,8 @@ let
   # architecture stays named in exactly one place.
   claude-code =
     inputs.claude-code-nix.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  codex =
+    inputs.codex-cli-nix.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 
 {
@@ -31,8 +33,9 @@ in
     nodejs      # 24.19.0 on nixpkgs 26.05 (the LTS line)
     pnpm        # 11.25.0, installed directly rather than through corepack
 
-    # claude code, and the statusline wired into ~/.claude/settings.json below
+    # claude code and codex, and the statusline wired into ~/.claude/settings.json below
     claude-code
+    codex
     ccstatusline
 
     # the font everything renders in
@@ -69,10 +72,11 @@ in
     '';
 
   # Matt Pocock's skills (github.com/mattpocock/skills), installed with the
-  # cross-agent `skills` CLI: one copy in ~/.agents/skills, linked into each agent
-  # it detects. It decides Claude Code is present by whether ~/.claude exists, so
-  # this runs after claudeStatusLine, which creates that directory on a fresh
-  # machine. Node comes from the store, so it is always there regardless of PATH.
+  # cross-agent `skills` CLI after Node, Claude Code and Codex are in place. One
+  # copy lands in ~/.agents/skills, which Codex reads directly; Claude Code gets a
+  # link per skill in ~/.claude/skills. Both agents are named rather than left to
+  # auto-detection, which goes by whether ~/.claude and ~/.codex exist - on a fresh
+  # machine they may not yet. Node comes from the store, so PATH doesn't matter.
   #
   # Installs once, then leaves the skills alone: re-running `add` overwrites the
   # files, and they are meant to be edited. Update deliberately with
@@ -90,6 +94,7 @@ in
         if (cd "${config.home.homeDirectory}" &&
             PATH="${pkgs.nodejs}/bin:/usr/bin:/bin:$PATH" \
               run npx -y skills@latest add mattpocock/skills -g -y \
+                -a claude-code codex \
               </dev/null >"$skillsLog" 2>&1); then
           echo "Installed Matt Pocock's skills into ~/.agents/skills"
         else

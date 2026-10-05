@@ -60,6 +60,7 @@
     casks = [
       "karabiner-elements"
       "claude"        # desktop app; the CLI comes from claude-code-nix
+      "codex-app"     # desktop app; the CLI comes from codex-cli-nix
       "ghostty"
       "slack"
       "zed"

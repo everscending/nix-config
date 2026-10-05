@@ -19,10 +19,14 @@
     # our nixpkgs - overriding it changes the derivation hash, which misses the
     # project's Cachix cache, and upstream only tests against its own pin.
     claude-code-nix.url = "github:sadjow/claude-code-nix";
+
+    # Codex CLI, from the same maintainer and for the same reasons as above,
+    # including not following our nixpkgs.
+    codex-cli-nix.url = "github:sadjow/codex-cli-nix";
   };
 
   outputs = inputs@{ self, nix-darwin, nix-homebrew, home-manager, nixpkgs
-    , claude-code-nix }:
+    , claude-code-nix, codex-cli-nix }:
     let
       # The one username line to change if this isn't your machine.
       # bootstrap.sh offers to rewrite this for you if your macOS username differs.
