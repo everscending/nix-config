@@ -47,6 +47,7 @@ flake input, and `ccstatusline` is pinned by hand in `ccstatusline.nix`.
 | `pnpm` | 11.25.0 | Installed directly rather than through corepack |
 | `claude-code` | 2.1.284 | The CLI, from the [claude-code-nix](https://github.com/sadjow/claude-code-nix) flake — see below |
 | `ccstatusline` | 2.2.30 | Claude Code status line. Not in nixpkgs — packaged from the npm tarball by `ccstatusline.nix` |
+| `gh` | 2.100.0 | GitHub CLI, set up by `programs.gh` — see below |
 
 `ripgrep`, `fd`, `fzf`, `jq` and `lazygit` are listed but commented out in
 `home.nix` — uncomment to pick them up.
@@ -113,6 +114,34 @@ than replaced, and a failure there won't abort the rest of the rebuild.
 Run `ccstatusline` to open its configuration TUI. Its own settings live in
 `~/.config/ccstatusline/settings.json`, which this config does not manage.
 
+### GitHub CLI — gh
+
+`programs.gh` installs `gh` and manages `~/.config/gh/config.yml`: HTTPS as the
+git protocol, and `zed --wait` as its editor. gh needs an editor that blocks until
+you close the file; with plain `zed` it would read back an empty PR body. That file
+is now a read-only link into the Nix store, so `gh config set` won't work — change
+settings in `home.nix` instead.
+
+It also makes git use gh's login for `github.com` and `gist.github.com` over HTTPS,
+so `git push` needs no SSH key or separate token. That setting lives in
+`~/.config/git/config`, which is why `programs.git` is enabled too — home-manager
+only writes git's config when it is. Two things it deliberately does *not* do:
+install a second git (`package = null`, so `/usr/bin/git` is still used), or touch
+`~/.gitconfig`, where your name and email stay. Commit signing is explicitly off,
+since home-manager would otherwise default it to GnuPG for this `stateVersion`.
+
+**Logging in is a one-time manual step**, not part of the config, because the
+token belongs in the macOS keychain rather than the world-readable Nix store. After
+`./build.sh`, run this in your own terminal (it's interactive):
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+```
+
+If it asks whether to authenticate Git with your GitHub credentials, answer no.
+Nix has already set that up, and yes would only write a redundant copy into
+`~/.gitconfig`. Check with `gh auth status`.
+
 ### Fonts
 
 `nerd-fonts.hack` (3.4.0+3.003), with `fontconfig` enabled.
@@ -166,7 +195,7 @@ it the switch prints a warning and continues rather than failing.
 | --- | --- |
 | `flake.nix` | Inputs (26.05 release line, plus `claude-code-nix` on its own), the `user` name, and the `mac` system output |
 | `configuration.nix` | System-wide: macOS defaults, Homebrew packages, activation scripts |
-| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, Claude Code status line |
+| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, gh and git, Claude Code status line |
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |
 | `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
 | `build.sh` | Locks new inputs as you, then applies the config as root |

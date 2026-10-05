@@ -8,8 +8,8 @@ Deliberate decisions in this repo - do NOT silently revert them:
 
 `README.md` carries a hand-written manifest of everything this config installs and
 configures, so it drifts silently. Any change to `home.packages`, `homebrew.brews`,
-`homebrew.casks`, `system.defaults`, shell aliases, session variables or the Zed
-settings must be reflected in the matching README section in the same commit. Use
+`homebrew.casks`, `system.defaults`, shell aliases, session variables, or the Zed,
+gh or git settings must be reflected in the matching README section in the same commit. Use
 `./update.sh` rather than a bare `nix flake update`: it moves the manifest's version
 numbers along with the lock.
 

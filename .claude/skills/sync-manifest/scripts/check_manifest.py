@@ -385,7 +385,14 @@ def main() -> int:
             missing.setdefault(key, []).append(name)
             problems.append(f"{name} — in {key} but missing from the "
                             f"'{fragment}' table")
-        for name in sorted(documented - declared):
+        undeclared = documented - declared
+        if undeclared and key == "home.packages":
+            # A row can be for a package a home-manager module installs rather
+            # than the home.packages list - programs.gh puts gh on PATH, for
+            # instance. Those are real, so check the evaluated config before
+            # calling the row stale. Only evaluated when needed: it is slow.
+            undeclared -= set(resolve_from_config(repo))
+        for name in sorted(undeclared):
             problems.append(f"{name} — in the '{fragment}' table but not in "
                             f"{key}; remove the row or re-add the package")
 
@@ -415,7 +422,10 @@ def main() -> int:
 
     versions_checked = False
     if args.versions:
-        nix_names = sorted(set(active))
+        # Resolve every name in the table too, not just home.packages, so rows for
+        # module-installed packages like gh get their versions checked.
+        table = readme_section(readme, "Languages and CLI tools") or []
+        nix_names = sorted(set(active) | {n for n, _ in table_rows(table)})
         info = resolve(repo, nix_names, local_pkgs)
         real = {k: v["version"] for k, v in info.items()}
         if real:

@@ -90,6 +90,34 @@ in
     };
   };
 
+  # GitHub CLI. Logging in stays manual - run `gh auth login` once; the token goes
+  # to the macOS keychain, not the nix store. gh/config.yml becomes a read-only
+  # link into the store, so change settings here rather than with `gh config set`.
+  programs.gh = {
+    enable = true;
+    settings = {
+      git_protocol = "https";
+      # gh needs an editor that blocks until the file is closed; bare `zed`
+      # returns immediately and gh would read back an empty PR body.
+      editor = "zed --wait";
+    };
+    # On by default: makes git use gh's login for github.com over https.
+    gitCredentialHelper.enable = true;
+  };
+
+  # The credential helper above is written into git's config, which home-manager
+  # only writes when programs.git is enabled. package = null keeps using the
+  # system git rather than installing a second one. This writes
+  # ~/.config/git/config, which git reads alongside ~/.gitconfig, so the name and
+  # email already in ~/.gitconfig keep working.
+  programs.git = {
+    enable = true;
+    package = null;
+    # With home.stateVersion 24.11 this defaults to openpgp, which writes a [gpg]
+    # section and pulls gnupg in. Commits aren't signed here, so leave it unset.
+    signing.format = null;
+  };
+
   programs.zsh = {
     enable = true;
     autosuggestion.enable = true;      # ghost text from history
