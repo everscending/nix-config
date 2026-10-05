@@ -114,6 +114,35 @@ than replaced, and a failure there won't abort the rest of the rebuild.
 Run `ccstatusline` to open its configuration TUI. Its own settings live in
 `~/.config/ccstatusline/settings.json`, which this config does not manage.
 
+### Matt Pocock's skills
+
+[mattpocock/skills](https://github.com/mattpocock/skills) — 38 agent skills such as
+`tdd`, `diagnosing-bugs` and `grill-me` — are installed with the cross-agent
+installer, `npx skills@latest add mattpocock/skills -g`. That keeps one copy in
+`~/.agents/skills` and links it into each coding agent it finds; today that's Claude
+Code, via `~/.claude/skills`.
+
+This runs at the end of home-manager activation, after Node and Claude Code are
+installed. The installer decides Claude Code is present by whether `~/.claude`
+exists, so it runs after the status-line step, which creates that directory on a
+fresh machine.
+
+It installs **once**. Running the installer again overwrites the skill files, and
+they're meant to be edited, so later rebuilds see the existing install (recorded in
+`~/.agents/.skill-lock.json`) and leave it alone. Update deliberately:
+
+```bash
+npx skills update -g
+```
+
+Because it needs the network, a failed install prints a warning and the rest of
+the rebuild carries on; the next `./build.sh` tries again. If you later add another
+agent, such as Codex, run `npx skills add mattpocock/skills -g` once by hand to link
+the skills into it too.
+
+Then run `/setup-matt-pocock-skills` in each repo you use them in. It asks which
+issue tracker and labels you use.
+
 ### GitHub CLI — gh
 
 `programs.gh` installs `gh` and manages `~/.config/gh/config.yml`: HTTPS as the
@@ -195,7 +224,7 @@ it the switch prints a warning and continues rather than failing.
 | --- | --- |
 | `flake.nix` | Inputs (26.05 release line, plus `claude-code-nix` on its own), the `user` name, and the `mac` system output |
 | `configuration.nix` | System-wide: macOS defaults, Homebrew packages, activation scripts |
-| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, gh and git, Claude Code status line |
+| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, gh and git, Claude Code status line, Matt Pocock's skills |
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |
 | `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
 | `build.sh` | Locks new inputs as you, then applies the config as root |

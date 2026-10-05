@@ -68,6 +68,38 @@ in
         "${ccstatusline}/bin/ccstatusline"
     '';
 
+  # Matt Pocock's skills (github.com/mattpocock/skills), installed with the
+  # cross-agent `skills` CLI: one copy in ~/.agents/skills, linked into each agent
+  # it detects. It decides Claude Code is present by whether ~/.claude exists, so
+  # this runs after claudeStatusLine, which creates that directory on a fresh
+  # machine. Node comes from the store, so it is always there regardless of PATH.
+  #
+  # Installs once, then leaves the skills alone: re-running `add` overwrites the
+  # files, and they are meant to be edited. Update deliberately with
+  # `npx skills update -g`. Never fails the switch - it needs the network, and a
+  # missing skill set shouldn't stop the rest of the machine from building.
+  home.activation.mattPocockSkills =
+    lib.hm.dag.entryAfter [ "writeBoundary" "claudeStatusLine" ] ''
+      skillsLock="${config.home.homeDirectory}/.agents/.skill-lock.json"
+      if [ -f "$skillsLock" ] && grep -q '"mattpocock/skills"' "$skillsLock"; then
+        verboseEcho "Matt Pocock's skills already installed; leaving them as they are"
+      else
+        skillsLog="$(mktemp)"
+        # cd ~ so the CLI doesn't treat the repo build.sh ran from as a project;
+        # stdin from /dev/null so it can never sit waiting on a prompt.
+        if (cd "${config.home.homeDirectory}" &&
+            PATH="${pkgs.nodejs}/bin:/usr/bin:/bin:$PATH" \
+              run npx -y skills@latest add mattpocock/skills -g -y \
+              </dev/null >"$skillsLog" 2>&1); then
+          echo "Installed Matt Pocock's skills into ~/.agents/skills"
+        else
+          echo "warning: Matt Pocock's skills were not installed; log follows" >&2
+          tail -n 20 "$skillsLog" >&2
+        fi
+        rm -f "$skillsLog"
+      fi
+    '';
+
   # Zed itself is installed by the Homebrew cask; Home Manager only manages its config.
   programs.zed-editor = {
     enable = true;
