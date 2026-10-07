@@ -43,12 +43,12 @@ their own flake inputs, and `ccstatusline` is pinned by hand in `ccstatusline.ni
 | --- | --- | --- |
 | `python3` | 3.13.15 | Tracks the nixpkgs default, so other Python packages share one interpreter |
 | `uv` | 0.11.21 | Venvs and package installs — `pip` can't write into the read-only Nix store |
-| `nodejs` | 24.19.0 | The LTS line, again the nixpkgs default |
-| `pnpm` | 11.25.0 | Installed directly rather than through corepack |
-| `claude-code` | 2.1.284 | The CLI, from the [claude-code-nix](https://github.com/sadjow/claude-code-nix) flake — see below |
+| `nodejs` | 24.21.0 | The LTS line, again the nixpkgs default |
+| `pnpm` | 11.27.0 | Installed directly rather than through corepack |
+| `claude-code` | 2.1.292 | The CLI, from the [claude-code-nix](https://github.com/sadjow/claude-code-nix) flake — see below |
 | `codex` | 0.160.1 | The Codex CLI, from the [codex-cli-nix](https://github.com/sadjow/codex-cli-nix) flake — see below |
 | `ccstatusline` | 2.2.30 | Claude Code status line. Not in nixpkgs — packaged from the npm tarball by `ccstatusline.nix` |
-| `gh` | 2.100.0 | GitHub CLI, set up by `programs.gh` — see below |
+| `gh` | 2.102.0 | GitHub CLI, set up by `programs.gh` — see below |
 
 `ripgrep`, `fd`, `fzf`, `jq` and `lazygit` are listed but commented out in
 `home.nix` — uncomment to pick them up.
