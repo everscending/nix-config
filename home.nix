@@ -159,9 +159,20 @@ in
     enable = true;
     autosuggestion.enable = true;      # ghost text from history
     syntaxHighlighting.enable = true;  # commands turn green when valid
-    initContent = ''
-      bindkey '^f' autosuggest-accept
-    '';
+    initContent = lib.mkMerge [
+      ''
+        bindkey '^f' autosuggest-accept
+      ''
+      # Machine-local layer on top of everything Nix generates: PATH entries,
+      # aliases, exports - anything you want without a rebuild. Nix never creates
+      # or touches ~/.zshrc.local. Order 2000 puts it after all of home-manager's
+      # own init (its highest is 1250), so its settings win. `if` rather than
+      # `[[ ]] &&`, so a missing file doesn't leave the first prompt showing a
+      # failed exit status.
+      (lib.mkOrder 2000 ''
+        if [[ -r ~/.zshrc.local ]]; then source ~/.zshrc.local; fi
+      '')
+    ];
     shellAliases = {
       ".." = "cd ..";
       add = "git add .";
