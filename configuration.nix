@@ -63,6 +63,7 @@
       "codex-app"     # desktop app; the CLI comes from codex-cli-nix
       "ghostty"
       "slack"
+      "tailscale-app" # the app; its pkg also puts the `tailscale` CLI in /usr/local/bin
       "zed"
     ];
   };

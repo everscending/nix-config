@@ -92,7 +92,14 @@ downloads the release binary from Anthropic's CDN instead, at similar cost.
 | `ghostty` | Terminal emulator |
 | `karabiner-elements` | Keyboard remapper |
 | `slack` | Chat |
+| `tailscale-app` | Tailscale VPN; also installs the `tailscale` CLI to `/usr/local/bin` |
 | `zed` | Code editor |
+
+Tailscale needs a one-time setup after the first `./build.sh`: open the app, approve
+its network extension when macOS asks (System Settings → Privacy & Security, or
+General → Login Items & Extensions), and log in. It updates itself after that. It's
+the app rather than nix-darwin's `services.tailscale`, which runs an older,
+headless daemon — don't enable both, as they would fight over the network setup.
 
 ### Claude Code status line
 
