@@ -125,23 +125,32 @@ than replaced, and a failure there won't abort the rest of the rebuild.
 Run `ccstatusline` to open its configuration TUI. Its own settings live in
 `~/.config/ccstatusline/settings.json`, which this config does not manage.
 
-### Matt Pocock's skills
+### Agent skills
 
-[mattpocock/skills](https://github.com/mattpocock/skills) — 38 agent skills such as
-`tdd`, `diagnosing-bugs` and `grill-me` — are installed with the cross-agent
-installer, `npx skills@latest add mattpocock/skills -g`, for both agents. One copy
-lands in `~/.agents/skills`, which Codex reads directly; Claude Code gets a link per
-skill in `~/.claude/skills`.
+Two sets of skills are installed for **both Claude Code and Codex**, using the
+cross-agent installer (`npx skills@latest add <source> -g`):
+
+| Source | What it adds |
+| --- | --- |
+| [mattpocock/skills](https://github.com/mattpocock/skills) | 38 engineering skills such as `tdd`, `diagnosing-bugs` and `grill-me` |
+| [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) | `lavish` — Lavish Editor: the agent writes plans, diagrams and reports as HTML you can annotate in the browser and send feedback on |
+
+One copy of each skill lands in `~/.agents/skills`, which Codex reads directly;
+Claude Code gets a link per skill in `~/.claude/skills`. Both agents are named
+explicitly (`-a claude-code codex`) instead of left to the installer's
+auto-detection, which only counts an agent as present once its `~/.claude` or
+`~/.codex` folder exists — on a fresh machine, not until you first run it. The list
+lives in `agentSkills` in `home.nix`; add a source there to install it everywhere.
 
 This runs at the end of home-manager activation, after Node, Claude Code and Codex
-are installed. Both agents are named explicitly (`-a claude-code codex`) instead of
-left to the installer's auto-detection, which only counts an agent as present once
-its `~/.claude` or `~/.codex` folder exists — on a fresh machine, not until you first
-run it.
+are installed. Lavish needs nothing else: its skill has the agent run
+`npx -y lavish-axi` when it's needed. Its optional session hook (`lavish-axi setup
+hooks`) is not set up here.
 
-It installs **once**. Running the installer again overwrites the skill files, and
-they're meant to be edited, so later rebuilds see the existing install (recorded in
-`~/.agents/.skill-lock.json`) and leave it alone. Update deliberately:
+Each source installs **once**. Running the installer again overwrites the skill
+files, and they're meant to be edited, so later rebuilds see each source in
+`~/.agents/.skill-lock.json` and leave it alone. That check is per source, so adding
+one later installs just that one. Update deliberately:
 
 ```bash
 npx skills update -g
@@ -149,11 +158,12 @@ npx skills update -g
 
 Because it needs the network, a failed install prints a warning and the rest of
 the rebuild carries on; the next `./build.sh` tries again. To link the skills into
-another agent later, run `npx skills add mattpocock/skills -g -a <agent>` once by
-hand; note that, like any re-run of `add`, it refreshes the skill files.
+another agent later, run `npx skills add <source> -g -a <agent>` once by hand; like
+any re-run of `add`, that refreshes the skill files.
 
-Then run `/setup-matt-pocock-skills` in each repo you use them in. It asks which
-issue tracker and labels you use.
+Then run `/setup-matt-pocock-skills` in each repo you use Matt's skills in. It asks
+which issue tracker and labels you use. Lavish is invoked as `/lavish` in Claude
+Code, or picked up on its own when a visual answer fits.
 
 ### GitHub CLI — gh
 
@@ -251,7 +261,7 @@ it the switch prints a warning and continues rather than failing.
 | --- | --- |
 | `flake.nix` | Inputs (26.05 release line, plus `claude-code-nix` and `codex-cli-nix` on their own), the `user` name, and the `mac` system output |
 | `configuration.nix` | System-wide: macOS defaults, Homebrew packages, activation scripts |
-| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, gh and git, Claude Code status line, Matt Pocock's skills |
+| `home.nix` | Per-user: packages, fonts, environment, zsh, Zed, gh and git, Claude Code status line, agent skills |
 | `ccstatusline.nix` | Packages `ccstatusline` from npm; bump the version and hash here |
 | `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
 | `build.sh` | Locks new inputs as you, then applies the config as root |

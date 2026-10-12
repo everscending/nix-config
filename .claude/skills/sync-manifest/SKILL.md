@@ -76,7 +76,7 @@ Then check the sections the script can't diff, if your change touched them:
 | Shell — zsh | `programs.zsh` (aliases, plugins, theme, `initContent` keybindings) |
 | Global package prefixes | `home.sessionVariables` and `home.sessionPath` |
 | Editor — Zed | `programs.zed-editor.userSettings` and `extensions` |
-| Matt Pocock's skills | `home.activation.mattPocockSkills` |
+| Agent skills | `agentSkills` in `home.nix`, installed by `home.activation.agentSkills` |
 | GitHub CLI — gh | `programs.gh` and `programs.git` (its row in the Nix table comes from `programs.gh`, not `home.packages`) |
 | macOS system settings | `system.defaults` and `system.activationScripts` |
 | Where things are defined | the set of files in the repo root |

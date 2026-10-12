@@ -13,6 +13,17 @@ let
     inputs.claude-code-nix.packages.${pkgs.stdenv.hostPlatform.system}.default;
   codex =
     inputs.codex-cli-nix.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+  # Agent skills installed for both Claude Code and Codex by
+  # home.activation.agentSkills below. Each entry is a `npx skills add` source;
+  # `args` narrows it, e.g. to one skill out of a repository.
+  agentSkills = [
+    { name = "Matt Pocock's skills"; source = "mattpocock/skills"; args = [ ]; }
+    # Lavish Editor (github.com/kunchenguid/lavish-axi): the skill is a short stub
+    # that has the agent run `npx -y lavish-axi` on demand, so there is no CLI to
+    # install. The repo's other skill, lavish-design, is internal to the project.
+    { name = "Lavish Editor"; source = "kunchenguid/lavish-axi"; args = [ "--skill" "lavish" ]; }
+  ];
 in
 
 {
@@ -71,38 +82,56 @@ in
         "${ccstatusline}/bin/ccstatusline"
     '';
 
-  # Matt Pocock's skills (github.com/mattpocock/skills), installed with the
-  # cross-agent `skills` CLI after Node, Claude Code and Codex are in place. One
-  # copy lands in ~/.agents/skills, which Codex reads directly; Claude Code gets a
-  # link per skill in ~/.claude/skills. Both agents are named rather than left to
-  # auto-detection, which goes by whether ~/.claude and ~/.codex exist - on a fresh
-  # machine they may not yet. Node comes from the store, so PATH doesn't matter.
+  # Agent skills from the `agentSkills` list above, installed with the cross-agent
+  # `skills` CLI after Node, Claude Code and Codex are in place. One copy lands in
+  # ~/.agents/skills, which Codex reads directly; Claude Code gets a link per skill
+  # in ~/.claude/skills. Both agents are named rather than left to auto-detection,
+  # which goes by whether ~/.claude and ~/.codex exist - on a fresh machine they may
+  # not yet. Node comes from the store, so PATH doesn't matter.
   #
-  # Installs once, then leaves the skills alone: re-running `add` overwrites the
-  # files, and they are meant to be edited. Update deliberately with
-  # `npx skills update -g`. Never fails the switch - it needs the network, and a
-  # missing skill set shouldn't stop the rest of the machine from building.
-  home.activation.mattPocockSkills =
-    lib.hm.dag.entryAfter [ "writeBoundary" "claudeStatusLine" ] ''
+  # Each source installs once, then is left alone: re-running `add` overwrites the
+  # files, and they are meant to be edited. The check is per source, so adding an
+  # entry later installs just that one. Update deliberately with
+  # `npx skills update -g`. Never fails the switch - it needs the network, and
+  # missing skills shouldn't stop the rest of the machine from building.
+  home.activation.agentSkills =
+    # After packages are installed and linked, so Node, Claude Code and Codex are
+    # in place, and after claudeStatusLine, which creates ~/.claude.
+    lib.hm.dag.entryAfter [
+      "writeBoundary"
+      "installPackages"
+      "linkGeneration"
+      "claudeStatusLine"
+    ] ''
       skillsLock="${config.home.homeDirectory}/.agents/.skill-lock.json"
-      if [ -f "$skillsLock" ] && grep -q '"mattpocock/skills"' "$skillsLock"; then
-        verboseEcho "Matt Pocock's skills already installed; leaving them as they are"
-      else
-        skillsLog="$(mktemp)"
+
+      installAgentSkills() {
+        local label="$1" source="$2"
+        shift 2
+        if [ -f "$skillsLock" ] && grep -qF "\"$source\"" "$skillsLock"; then
+          verboseEcho "$label already installed; leaving it as it is"
+          return 0
+        fi
+        local log
+        log="$(mktemp)"
         # cd ~ so the CLI doesn't treat the repo build.sh ran from as a project;
         # stdin from /dev/null so it can never sit waiting on a prompt.
         if (cd "${config.home.homeDirectory}" &&
             PATH="${pkgs.nodejs}/bin:/usr/bin:/bin:$PATH" \
-              run npx -y skills@latest add mattpocock/skills -g -y \
+              run npx -y skills@latest add "$source" "$@" -g -y \
                 -a claude-code codex \
-              </dev/null >"$skillsLog" 2>&1); then
-          echo "Installed Matt Pocock's skills into ~/.agents/skills"
+              </dev/null >"$log" 2>&1); then
+          echo "Installed $label into ~/.agents/skills"
         else
-          echo "warning: Matt Pocock's skills were not installed; log follows" >&2
-          tail -n 20 "$skillsLog" >&2
+          echo "warning: $label was not installed; log follows" >&2
+          tail -n 20 "$log" >&2
         fi
-        rm -f "$skillsLog"
-      fi
+        rm -f "$log"
+      }
+
+      ${lib.concatMapStrings (skill: ''
+        installAgentSkills ${lib.escapeShellArgs ([ skill.name skill.source ] ++ skill.args)}
+      '') agentSkills}
     '';
 
   # Zed itself is installed by the Homebrew cask; Home Manager only manages its config.
