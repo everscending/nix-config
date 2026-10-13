@@ -22,7 +22,7 @@ review.
 ## 1. Find the drift
 
 ```bash
-python3 .claude/skills/sync-manifest/scripts/check_manifest.py --repo . --versions --suggest
+python3 .agents/skills/sync-manifest/scripts/check_manifest.py --repo . --versions --suggest
 ```
 
 This compares package names in the nix files against the rows in each README
@@ -114,7 +114,7 @@ nix eval --raw --impure --expr 'let p = (builtins.getFlake (toString ./.)).input
 ## 3. Re-run until clean
 
 ```bash
-python3 .claude/skills/sync-manifest/scripts/check_manifest.py --repo . --versions
+python3 .agents/skills/sync-manifest/scripts/check_manifest.py --repo . --versions
 ```
 
 Keep going until it reports the manifest is in sync. It exits 0 when clean and 1

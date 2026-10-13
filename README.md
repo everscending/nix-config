@@ -266,6 +266,7 @@ it the switch prints a warning and continues rather than failing.
 | `claude-statusline.py` | Merges the `statusLine` block into `~/.claude/settings.json` on activation |
 | `build.sh` | Locks new inputs as you, then applies the config as root |
 | `update.sh` | Updates inputs, fixes manifest versions, commits both |
+| `.agents/skills/` | Repo skills — `add-config`, `remove-config`, `sync-manifest` — for any agent; `.claude/skills/` links to them for Claude Code |
 | `flake.lock` | Exact input revisions — commit changes to this |
 
 `nix.enable = false` because the Determinate installer already manages the Nix

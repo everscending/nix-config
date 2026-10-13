@@ -17,8 +17,15 @@ Use the `sync-manifest` skill for this — it maps each README section to its so
 and bundles a drift checker:
 
 ```sh
-python3 .claude/skills/sync-manifest/scripts/check_manifest.py --repo . --versions
+python3 .agents/skills/sync-manifest/scripts/check_manifest.py --repo . --versions
 ```
+
+## Repo skills
+
+Skills for this repo live in `.agents/skills/`, which Codex and other agents read;
+`.claude/skills/` holds a symlink to each one for Claude Code. Add a new skill the
+same way, so every agent sees the same copy. `add-config` and `remove-config` are
+the way to add or remove software here.
 
 ## Maintaining this file
 

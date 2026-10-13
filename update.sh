@@ -11,7 +11,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$DIR"
 
-CHECK=.claude/skills/sync-manifest/scripts/check_manifest.py
+CHECK=.agents/skills/sync-manifest/scripts/check_manifest.py
 
 # The commit should contain exactly what the update changed, so refuse to run over
 # hand edits to the two files it commits.
