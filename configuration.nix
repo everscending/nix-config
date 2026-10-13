@@ -62,6 +62,7 @@
       "claude"        # desktop app; the CLI comes from claude-code-nix
       "codex-app"     # desktop app; the CLI comes from codex-cli-nix
       "ghostty"
+      "orbstack"      # Docker engine + Linux VMs; the app also provides docker/compose
       "slack"
       "tailscale-app" # the app; its pkg also puts the `tailscale` CLI in /usr/local/bin
       "zed"

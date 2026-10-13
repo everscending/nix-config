@@ -91,9 +91,17 @@ downloads the release binary from Anthropic's CDN instead, at similar cost.
 | `codex-app` | Codex desktop app (the CLI comes from Nix, above) |
 | `ghostty` | Terminal emulator |
 | `karabiner-elements` | Keyboard remapper |
+| `orbstack` | Docker engine and Linux VMs, replacing Docker Desktop; provides `docker`, `docker compose` and `orb` |
 | `slack` | Chat |
 | `tailscale-app` | Tailscale VPN; also installs the `tailscale` CLI to `/usr/local/bin` |
 | `zed` | Code editor |
+
+OrbStack also needs its first launch: open it to finish setup and approve the
+admin prompt, which lets it point `/var/run/docker.sock` at its engine. It puts its
+command-line tools on `PATH` through a line it adds to `~/.zprofile` — a file Nix
+doesn't manage, so that keeps working. Leave the line there. All containers,
+images and volumes live in `~/.orbstack`, which the cask's zap step trashes if
+`orbstack` is ever removed from this config.
 
 Tailscale needs a one-time setup after the first `./build.sh`: open the app, approve
 its network extension when macOS asks (System Settings → Privacy & Security, or
